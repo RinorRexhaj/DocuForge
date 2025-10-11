@@ -26,7 +26,7 @@ import cv2
 # -------------------------
 RVLCDIP_ROOT = r"E:\Thesis\rvl-cdip\images"   # input root (recursive)
 OUTPUT_ROOT = r"E:\Thesis\forgery_dataset_realistic"
-SAMPLE_SIZE = 2000    # how many images to sample (set to total if you want everything)
+SAMPLE_SIZE = 500    # how many images to sample (set to total if you want everything)
 SEED = 42
 
 # Splits ratio
