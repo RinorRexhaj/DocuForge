@@ -1,4 +1,9 @@
 dataset
+invoices
+letters
+forms
+scientific
+articles
 .vscode/
 __pycache__/
 *.pyc
