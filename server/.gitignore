@@ -1,0 +1,16 @@
+dataset
+runs
+test
+saved_models
+evaluation_results
+invoices
+letters
+forms
+scientific
+articles
+.vscode/
+__pycache__/
+*.pyc
+venv/
+.venv/
+images/

@@ -1,0 +1,309 @@
+"""
+TAMPERING LOCALIZATION SYSTEM ARCHITECTURE
+===========================================
+
+                                    INPUT IMAGE
+                                        │
+                                        │
+                        ┌───────────────┴───────────────┐
+                        │                               │
+                        │      Image Preprocessing      │
+                        │   - Resize (224×224)          │
+                        │   - Normalize (ImageNet)      │
+                        │   - Convert to tensor         │
+                        └───────────────┬───────────────┘
+                                        │
+                ┌───────────────────────┴───────────────────────┐
+                │                                               │
+                │                                               │
+    ┌───────────▼────────────┐                    ┌────────────▼────────────┐
+    │                        │                    │                         │
+    │  DEEP LEARNING BRANCH  │                    │   CLASSICAL FORENSICS   │
+    │                        │                    │         BRANCH          │
+    │  ┌──────────────────┐  │                    │                         │
+    │  │   Grad-CAM       │  │                    │  ┌──────────────────┐   │
+    │  │   Computation    │  │                    │  │  Error Level     │   │
+    │  │                  │  │                    │  │  Analysis (ELA)  │   │
+    │  │ - Target Layer   │  │                    │  │                  │   │
+    │  │ - Forward Pass   │  │                    │  │ JPEG re-compress │   │
+    │  │ - Backward Pass  │  │                    │  │ Compute diff     │   │
+    │  │ - Gradient CAM   │  │                    │  └──────────────────┘   │
+    │  └──────────────────┘  │                    │                         │
+    │                        │                    │  ┌──────────────────┐   │
+    │  Output:               │                    │  │  Noise           │   │
+    │  Forgery Attention     │                    │  │  Inconsistency   │   │
+    │  Heatmap [0,1]         │                    │  │                  │   │
+    │                        │                    │  │ Local variance   │   │
+    └────────────┬───────────┘                    │  │ Median filter    │   │
+                 │                                │  └──────────────────┘   │
+                 │                                │                         │
+                 │                                │  ┌──────────────────┐   │
+                 │                                │  │  Edge Artifacts  │   │
+                 │                                │  │                  │   │
+                 │                                │  │ Laplacian filter │   │
+                 │                                │  │ High-freq detect │   │
+                 │                                │  └──────────────────┘   │
+                 │                                │                         │
+                 │                                │  ┌──────────────────┐   │
+                 │                                │  │  JPEG Block      │   │
+                 │                                │  │  Artifacts       │   │
+                 │                                │  │                  │   │
+                 │                                │  │ 8×8 DCT blocks   │   │
+                 │                                │  │ High-freq coeffs │   │
+                 │                                │  └──────────────────┘   │
+                 │                                │                         │
+                 │                                │  ┌──────────────────┐   │
+                 │                                │  │  Copy-Move       │   │
+                 │                                │  │  Detection       │   │
+                 │                                │  │                  │   │
+                 │                                │  │ ORB keypoints    │   │
+                 │                                │  │ Feature matching │   │
+                 │                                │  └──────────────────┘   │
+                 │                                │                         │
+                 │                                │  Output:                │
+                 │                                │  5 Forensic Heatmaps    │
+                 │                                │  [0,1] normalized       │
+                 │                                └────────────┬────────────┘
+                 │                                             │
+                 │                                             │
+                 └──────────────┬──────────────────────────────┘
+                                │
+                                │
+                    ┌───────────▼───────────┐
+                    │                       │
+                    │   FUSION LAYER        │
+                    │                       │
+                    │  Weighted Combination │
+                    │  - 40% Grad-CAM       │
+                    │  - 60% Classical      │
+                    │                       │
+                    │  Normalization [0,1]  │
+                    │                       │
+                    └───────────┬───────────┘
+                                │
+                                │
+                    ┌───────────▼───────────┐
+                    │                       │
+                    │   POST-PROCESSING     │
+                    │                       │
+                    │  - Thresholding       │
+                    │  - Morphology         │
+                    │    (close, open)      │
+                    │  - Contour detection  │
+                    │  - Bounding boxes     │
+                    │                       │
+                    └───────────┬───────────┘
+                                │
+                                │
+                ┌───────────────┴───────────────┐
+                │                               │
+                │                               │
+    ┌───────────▼─────────┐         ┌──────────▼──────────┐
+    │                     │         │                     │
+    │   VISUALIZATION     │         │   QUANTIFICATION    │
+    │                     │         │                     │
+    │  - Heatmap overlay  │         │  - Probability      │
+    │  - Binary mask      │         │  - Bounding boxes   │
+    │  - Colored regions  │         │  - Region count     │
+    │  - 4-panel view     │         │  - Confidence       │
+    │                     │         │                     │
+    └─────────────────────┘         └─────────────────────┘
+                │                               │
+                └───────────────┬───────────────┘
+                                │
+                                │
+                    ┌───────────▼───────────┐
+                    │                       │
+                    │   OUTPUT DICTIONARY   │
+                    │                       │
+                    │  - heatmap (image)    │
+                    │  - mask (binary)      │
+                    │  - bboxes (coords)    │
+                    │  - probability        │
+                    │  - fused_map          │
+                    │  - intermediate_maps  │
+                    │                       │
+                    └───────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+COMPONENT DETAILS
+═══════════════════════════════════════════════════════════════════
+
+1. GRAD-CAM COMPUTATION
+   ├── Input: Image tensor (1, 3, 224, 224)
+   ├── Forward: Extract activation maps
+   ├── Backward: Compute gradients
+   ├── Weights: Global average pooling of gradients
+   ├── CAM: Weighted sum of activation maps
+   └── Output: Heatmap (224, 224) normalized [0,1]
+
+2. ERROR LEVEL ANALYSIS (ELA)
+   ├── Input: Original image
+   ├── Process: Re-compress as JPEG (quality 90)
+   ├── Compute: Pixel-wise absolute difference
+   ├── Enhance: Power transform (γ=0.7)
+   └── Output: ELA map [0,1]
+
+3. NOISE INCONSISTENCY
+   ├── Input: RGB image → Grayscale
+   ├── Compute: Local standard deviation (7×7 window)
+   ├── Expected: Median filtered noise level (15×15)
+   ├── Detect: |actual - expected|
+   └── Output: Inconsistency map [0,1]
+
+4. EDGE ARTIFACTS
+   ├── Input: RGB image → Grayscale
+   ├── Filter: Laplacian (ksize=3)
+   ├── Smooth: Gaussian blur (5×5)
+   ├── Statistics: Local std dev (9×9)
+   └── Output: Edge artifact map [0,1]
+
+5. JPEG BLOCK ARTIFACTS
+   ├── Input: RGB image → Grayscale
+   ├── Blocks: Divide into 8×8 tiles
+   ├── DCT: Discrete Cosine Transform per block
+   ├── Detect: High-frequency coefficients (4:8, 4:8)
+   ├── Smooth: Gaussian blur (9×9)
+   └── Output: Block artifact map [0,1]
+
+6. COPY-MOVE DETECTION
+   ├── Input: RGB image → Grayscale
+   ├── Features: ORB keypoints (n=2000)
+   ├── Match: kNN matching (k=2)
+   ├── Filter: Ratio test + distance threshold
+   ├── Visualize: Gaussian circles at matches
+   └── Output: Copy-move heatmap [0,1]
+
+7. FUSION LAYER
+   ├── Input: Grad-CAM + 5 Classical maps
+   ├── Resize: All to same dimensions
+   ├── Combine: 0.4×Grad-CAM + 0.6×Mean(Classical)
+   ├── Normalize: Min-max to [0,1]
+   └── Output: Fused suspicion map
+
+8. POST-PROCESSING
+   ├── Input: Fused map [0,1]
+   ├── Threshold: Binary mask (t=0.5)
+   ├── Morphology: Close (fill holes) → Open (remove noise)
+   ├── Contours: Find external contours
+   ├── Filter: Min area = 100 pixels
+   ├── BBox: Extract bounding rectangles
+   └── Output: Binary mask + bbox list
+
+9. VISUALIZATION
+   ├── Heatmap overlay: JET colormap + alpha blend
+   ├── Binary mask: Grayscale image
+   ├── Bounding boxes: Red rectangles
+   ├── 4-panel: Original | Overlay | Mask | Boxes
+   ├── Individual maps: (optional) Save as PNG
+   └── Output: PNG files + in-memory arrays
+
+
+═══════════════════════════════════════════════════════════════════
+DATA FLOW EXAMPLE
+═══════════════════════════════════════════════════════════════════
+
+Input: passport_scan.jpg (1200×1800 pixels)
+  ↓
+Preprocessing:
+  - Resize to 224×224 for model
+  - Keep original for visualization
+  ↓
+Grad-CAM Branch:
+  - Model forward pass
+  - Target layer: ResNet layer4[-1]
+  - Gradient computation
+  → Grad-CAM heatmap: (224×224) values [0.1, 0.9, 0.3, ...]
+  ↓
+Classical Branch (parallel):
+  - ELA: [0.2, 0.8, 0.5, ...]
+  - Noise: [0.3, 0.7, 0.4, ...]
+  - Edge: [0.1, 0.9, 0.2, ...]
+  - JPEG: [0.4, 0.6, 0.7, ...]
+  - Copy-Move: [0.0, 0.0, 0.8, ...] (sparse)
+  ↓
+Fusion:
+  - Resize Grad-CAM to 1200×1800
+  - Mean classical: [0.2, 0.75, 0.52, ...]
+  - Weighted sum: 0.4×GC + 0.6×Classical
+  → Fused: [0.16, 0.81, 0.43, ...]
+  ↓
+Post-processing:
+  - Threshold (0.5): [0, 1, 0, 1, 1, ...]
+  - Morphology: Clean up noise
+  - Contours: 3 regions found
+  - BBoxes: [(100, 200, 150, 80), (500, 300, 200, 120), ...]
+  ↓
+Output:
+  {
+    "probability": 0.67,
+    "num_regions": 3,
+    "bboxes": [(100,200,150,80), (500,300,200,120), ...],
+    "heatmap": RGB array (1200×1800×3),
+    "mask": Binary array (1200×1800)
+  }
+
+
+═══════════════════════════════════════════════════════════════════
+CLASS HIERARCHY
+═══════════════════════════════════════════════════════════════════
+
+DocumentTamperingDetector
+├── __init__(model, device, output_dir)
+├── preprocess_image(image_path)
+│   └── Returns: BGR, RGB, original, tensor
+├── compute_gradcam(img_tensor, target_layer)
+│   ├── Uses: pytorch-grad-cam OR
+│   └── _custom_gradcam(img_tensor)
+│       └── _get_target_layer()
+├── error_level_analysis(img_bgr, quality)
+├── noise_inconsistency_map(img_rgb)
+├── edge_artifact_map(img_rgb)
+├── jpeg_block_artifact_analysis(img_rgb)
+├── copy_move_detection(img_rgb, threshold)
+├── combine_maps_fusion(gradcam, classical, weights)
+├── apply_heatmap_overlay(img, heatmap, alpha, colormap)
+├── extract_bounding_boxes_from_mask(mask, min_area)
+└── visualize_results(img, heatmap, mask, bboxes, filename)
+
+Standalone Functions
+├── detect_tampering_hybrid(image_path, model, device, ...)
+│   └── Main entry point - orchestrates entire pipeline
+├── visualize_detection_result(result, display)
+│   └── Quick visualization helper
+└── batch_detect_tampering(image_paths, model, device, output_csv)
+    └── Process multiple documents
+
+
+═══════════════════════════════════════════════════════════════════
+ALGORITHM COMPLEXITY
+═══════════════════════════════════════════════════════════════════
+
+Time Complexity:
+├── Grad-CAM: O(n²) forward + backward pass
+├── ELA: O(n²) JPEG compression + diff
+├── Noise: O(n²) convolution operations
+├── Edge: O(n²) Laplacian filter
+├── JPEG: O((n/8)²) DCT per 8×8 block
+├── Copy-Move: O(k²) keypoint matching (k=num features)
+├── Fusion: O(n²) weighted combination
+└── Total: O(n²) dominated by image operations
+
+Space Complexity:
+├── Input image: O(n²)
+├── Model activations: O(n²)
+├── Forensic maps: O(5n²) for 5 techniques
+├── Output: O(n²)
+└── Total: O(n²)
+
+Where n = √(width × height) ≈ √(1200×1800) ≈ 1470
+
+
+═══════════════════════════════════════════════════════════════════
+End of Architecture Documentation
+═══════════════════════════════════════════════════════════════════
+"""
+
+if __name__ == "__main__":
+    print(__doc__)
