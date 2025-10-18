@@ -1,6 +1,18 @@
 # DocuForge - Document Forgery Detection System
 
-## 📁 Project Structure
+## � Authentication
+
+The API now supports **Auth0 JWT authentication** to protect endpoints. When enabled, clients must include a valid Bearer token in the `Authorization` header.
+
+**Quick Start:**
+
+1. See `docs/AUTH0_QUICK_REFERENCE.md` for 5-minute setup
+2. Full guide: `docs/AUTH0_SETUP_GUIDE.md`
+3. Implementation details: `docs/AUTH0_IMPLEMENTATION_SUMMARY.md`
+
+**Development Mode:** Run without authentication by not setting Auth0 environment variables.
+
+## �📁 Project Structure
 
 The codebase has been reorganized into logical folders for better maintainability:
 
@@ -8,6 +20,7 @@ The codebase has been reorganized into logical folders for better maintainabilit
 server/
 ├── api/                    # API-related files
 │   ├── main.py            # FastAPI application and endpoints
+│   ├── auth.py            # Auth0 JWT authentication module (NEW)
 │   └── start_server.py    # Server startup script with dependency checks
 │
 ├── models/                # Machine learning models
@@ -46,7 +59,10 @@ server/
 │   ├── IMPLEMENTATION_SUMMARY.txt
 │   ├── RUN_SERVER.md
 │   ├── SETUP_GUIDE.md
-│   └── TAMPERING_DETECTION_README.md
+│   ├── TAMPERING_DETECTION_README.md
+│   ├── AUTH0_SETUP_GUIDE.md         # Auth0 complete setup guide (NEW)
+│   ├── AUTH0_IMPLEMENTATION_SUMMARY.md  # Implementation details (NEW)
+│   └── AUTH0_QUICK_REFERENCE.md     # Quick reference card (NEW)
 │
 ├── scripts/            # Shell and batch scripts
 │   ├── run              # Unix/Linux startup script
