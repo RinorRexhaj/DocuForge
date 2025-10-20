@@ -230,8 +230,8 @@ def example_api_integration():
     
     import json
     
-    model_path = "models/saved_models/best_model.pth"
-    image_path = "dataset/test/forged/corti0002150_forged.png"
+    model_path = "server/models/saved_models/best_model.pth"
+    image_path = "server/examples/2048864472_2048864474_forged.png"
     
     if not os.path.exists(model_path) or not os.path.exists(image_path):
         print("❌ Required files not found")
@@ -249,7 +249,7 @@ def example_api_integration():
         model=model,
         device=device,
         save_results=True,
-        sensitivity=0.5
+        sensitivity=0.7
     )
     
     # Create API response format
@@ -282,10 +282,10 @@ def example_api_integration():
     print(json.dumps(api_response, indent=2))
     
     # Save response
-    with open("tampering_results/api_response.json", "w") as f:
+    with open("server/tampering_results/api_response.json", "w") as f:
         json.dump(api_response, f, indent=2)
-    
-    print(f"\n✅ API response saved to: tampering_results/api_response.json")
+
+    print(f"\n✅ API response saved to: server/tampering_results/api_response.json")
 
 
 def main():
@@ -296,7 +296,7 @@ def main():
     print("="*70)
     
     # Check if model exists
-    if not os.path.exists("saved_models/best_model.pth"):
+    if not os.path.exists("models/saved_models/best_model.pth"):
         print("\n⚠️  Warning: Model file not found at 'saved_models/best_model.pth'")
         print("Please train a model first or provide the correct path.")
         print("\nYou can still review the example code structure.\n")
