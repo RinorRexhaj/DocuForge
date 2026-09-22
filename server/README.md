@@ -243,18 +243,6 @@ See `requirements/` folder for complete dependency lists.
 - **REST API**: Easy integration with web and mobile applications
 - **Batch Processing**: Process multiple documents efficiently
 
-## 📄 License
-
-[Your License Here]
-
-## 👥 Authors
-
-DocuForge Team
-
-## 🤝 Contributing
-
-[Contribution guidelines]
-
 ---
 
 For more information, see the documentation in the `docs/` folder.
